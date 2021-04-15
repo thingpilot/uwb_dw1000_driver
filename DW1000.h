@@ -5,13 +5,14 @@
 * @brief   H file of the DW1000 driver module. Changed to fit cav project. 
 * 
 */
+ 
 #ifndef DW1000_H
 #define DW1000_H
  
 #include "mbed.h"
  
 // register addresses
-//                                  Address Bytes Description
+//      Mnemonic                    Address Bytes Description
 #define DW1000_DEV_ID               0x00 //     4 Device Identifier – includes device type and revision information
 #define DW1000_EUI                  0x01 //     8 Extended Unique Identifier
 #define DW1000_PANADR               0x03 //     4 PAN Identifier and Short Address
@@ -59,7 +60,9 @@
 class DW1000 {
     public:            
         DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ);              // constructor, uses SPI class
-
+        
+        int wakeup_init();
+ 
         // Device API
         uint32_t getDeviceID();                                                                 // gets the Device ID which should be 0xDECA0130 (good for testing SPI!)
         uint64_t getEUI();                                                                      // gets 64 bit Extended Unique Identifier according to IEEE standard
@@ -76,7 +79,9 @@ class DW1000 {
         void startRX();                                                                         // start listening for frames
         void stopTRX();   
         void deepsleep();                                                                      // disable tranceiver go back to idle mode
-        
+        void configure_sleep();
+        void spi_wakeup();
+        void dw_on();
         
     //private:
         void loadLDE();                                                                         // load the leading edge detection algorithm to RAM, [IMPORTANT because receiving malfunction may occur] see User Manual LDELOAD on p22 & p158
@@ -85,7 +90,10 @@ class DW1000 {
  
         // Interrupt
         InterruptIn irq; 
-        void receiveFrame();                                                                    // Pin used to handle Events from DW1000 by an Interrupthandler
+        void receiveFrame();                                                                            // Pin used to handle Events from DW1000 by an Interrupthandler
+       
+        // FunctionPointer callbackRX;                                                             // function pointer to callback which is called when successfull RX took place
+        // FunctionPointer callbackTX;                                                             // function pointer to callback which is called when successfull TX took place
         void setInterrupt(bool RX, bool TX);                                                    // set Interrupt for received a good frame (CRC ok) or transmission done
         void ISR();                                                                             // interrupt handling method (also calls according callback methods)
         uint16_t getFramelength();                                                              // to get the framelength of the received frame from the PHY header

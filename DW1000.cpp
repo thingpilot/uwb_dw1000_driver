@@ -8,38 +8,63 @@
 
 #include "DW1000.h"
  
-DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ) :
-                irq(IRQ), spi(MOSI, MISO, SCLK), cs(CS) {
-   
+DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ) : irq(IRQ), spi(MOSI, MISO, SCLK), cs(CS)
+{
+
+    //dw_on();
     deselect();                         // Chip must be deselected first
     spi.format(8,0);                    // Setup the spi for standard 8 bit data and SPI-Mode 0 (GPIO5, GPIO6 open circuit or ground on DW1000)
     spi.frequency(5000000);             // with a 1MHz clock rate (worked up to 49MHz in our Test)
-    resetAll();                         // we do a soft reset of the DW1000 everytime the driver starts
+   // dw_on();
+    ThisThread::sleep_for(300ms);
 
+    resetAll();                         // we do a soft reset of the DW1000 everytime the driver starts
+    // writeRegister16(DW1000_AON, 0x00, 0x00);
+    // writeRegister16(DW1000_AON, 0x06, 0x00);
+    // writeRegister8(DW1000_AON, 0x02, 0x00); // Clear the register
+    // writeRegister8(DW1000_AON, 0x02, 0x02);
+
+    // // Reset HIF, TX, RX and PMSC
+    // writeRegister8(DW1000_PMSC, 3, 0x00);
+    // ThisThread::sleep_for(1s);
+    // writeRegister8(DW1000_PMSC, 3, 0xF0);
+
+    //Automatic Gain control Configurations
     //Those values are for the 110kbps mode (5, 16MHz, 1024 Symbols) and are quite complete
-    writeRegister16(DW1000_AGC_CTRL, 0x04, 0x8870);             //AGC_TUNE1 for 16MHz PRF
-    writeRegister32(DW1000_AGC_CTRL, 0x0C, 0x2502A907);         //AGC_TUNE2 (Universal)
-    writeRegister16(DW1000_AGC_CTRL, 0x12, 0x0055);             //AGC_TUNE3 (Universal)
+    writeRegister16(DW1000_AGC_CTRL, 0x04, 0x8870);             //AGC_TUNE1 for 16MHz PRF, for best performance
+    writeRegister32(DW1000_AGC_CTRL, 0x0C, 0x2502A907);         //AGC_TUNE2 (Universal - DO NOT WRITE ANY OTHER VALUE)
+    writeRegister16(DW1000_AGC_CTRL, 0x12, 0x0035);             //AGC_TUNE3 (Universal - DO NOT WRITE ANY OTHER VALUE)
  
+    //DRX_TUNE
     writeRegister16(DW1000_DRX_CONF, 0x02, 0x000A);             //DRX_TUNE0b for 110kbps
     writeRegister16(DW1000_DRX_CONF, 0x04, 0x0087);             //DRX_TUNE1a for 16MHz PRF
     writeRegister16(DW1000_DRX_CONF, 0x06, 0x0064);             //DRX_TUNE1b for 110kbps & > 1024 symbols
-    writeRegister32(DW1000_DRX_CONF, 0x08, 0x351A009A);         //PAC size for 1024 symbols preamble & 16MHz PRF
-    //writeRegister32(DW1000_DRX_CONF, 0x08, 0x371A011D);               //PAC size for 2048 symbols preamble
+    //writeRegister32(DW1000_DRX_CONF, 0x08, 0x311A002D);         //optimal
+    writeRegister32(DW1000_DRX_CONF, 0x08, 0x371A011D);               //PAC size for 2048 symbols preamble
  
-    writeRegister8 (DW1000_LDE_CTRL, 0x0806, 0xD);              //LDE_CFG1
+    //LDE CONFIGURATION. Default is set to 0x0000
+    writeRegister8 (DW1000_LDE_CTRL, 0x0806, 0xD);              //LDE_CFG1 0xD (better performance)
     writeRegister16(DW1000_LDE_CTRL, 0x1806, 0x1607);           //LDE_CFG2 for 16MHz PRF
-    writeRegister32(DW1000_TX_POWER, 0, 0x28282828);            //Power for channel 5
+    
+    //TX POWER (When the message is smaller the tx power decreases)
+    //writeRegister32(DW1000_TX_POWER, 0, 0x28282828);           //Power for channel 5
+    writeRegister32(DW1000_TX_POWER, 0X0, 0x0E082848);
+
+    //RF_TXCTRL 
     writeRegister8(DW1000_RF_CONF, 0x0B, 0xD8);                 //RF_RXCTRLH for channel 5
     writeRegister32(DW1000_RF_CONF, 0x0C, 0x001E3FE0);          //RF_TXCTRL for channel 5
- 
+    
+    //TC_PGDELAY 
     writeRegister8 (DW1000_TX_CAL, 0x0B, 0xC0);                 //TC_PGDELAY for channel 5
- 
+    
+    //FS_PLLTUNE
     writeRegister32 (DW1000_FS_CTRL, 0x07, 0x0800041D);         //FS_PLLCFG for channel 5
-    writeRegister8 (DW1000_FS_CTRL, 0x0B, 0xA6);                //FS_PLLTUNE for channel 5
+    writeRegister8 (DW1000_FS_CTRL, 0x0B, 0xBE);                //FS_PLLTUNE for channel 5
  
     loadLDE();                          // important everytime DW1000 initialises/awakes otherwise the LDE algorithm must be turned off or there's receiving malfunction see User Manual LDELOAD on p22 & p158
     
+    
+
     // 110kbps CAUTION: a lot of other registers have to be set for an optimized operation on 110kbps
     writeRegister16(DW1000_TX_FCTRL, 1, 0x0800 | 0x0100 | 0x0080); // use 1024 symbols preamble (0x0800) (previously 2048 - 0x2800), 16MHz pulse repetition frequency (0x0100), 110kbps bit rate (0x0080) see p.69 of DW1000 User Manual
     writeRegister8(DW1000_SYS_CFG, 2, 0x44);    // enable special receiving option for 110kbps (disable smartTxPower)!! (0x44) see p.64 of DW1000 User Manual [DO NOT enable 1024 byte frames (0x03) becuase it generates disturbance of ranging don't know why...]
@@ -48,16 +73,51 @@ DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ
     writeRegister16(DW1000_LDE_CTRL, 0x1804, 16384); // = 2^14 a quarter of the range of the 16-Bit register which corresponds to zero calibration in a round trip (TX1+RX2+TX2+RX1)
  
     writeRegister8(DW1000_SYS_CFG, 3, 0x20);    // enable auto reenabling receiver after error
+  
+    writeRegister8(DW1000_AON, 0x0A, 0x00);
     
-   // irq.rise(DW1000::receiveFrame);       // attach interrupt handler to rising edge of interrupt pin from DW1000
-    //irq.rise(callback(this, &DW1000::receiveFrame));
 }
  
 
-void DW1000::receiveFrame(){
+int DW1000::wakeup_init()
+{
+
+    //waking up from sleep
+    //check if ldo tune is calibrated from otp(if zero) and write the value to the register
+    uint32_t result;
+
+    readRegister(DW1000_OTP_IF, 0x04, (uint8_t*)&result, 4);
+    if(result != 0)
+    {
+        writeRegister16(DW1000_RF_CONF, 0x30, result);
+    }
+    else 
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+void DW1000::dw_on()
+{
+    DigitalOut p_spics(p2);
+    p_spics = 0;
+    rtos::ThisThread::sleep_for(1s);
+    p_spics = 1;
+    rtos::ThisThread::sleep_for(1s);
+    p_spics = 0;
+}
+
+void DW1000::receiveFrame()
+{
 
 }
-uint32_t DW1000::getDeviceID() {
+
+/* Reads the device id it should be 0xdeca0130
+ */
+uint32_t DW1000::getDeviceID() 
+{
     uint32_t result;
     readRegister(DW1000_DEV_ID, 0, (uint8_t*)&result, 4);
     return result;
@@ -145,16 +205,66 @@ void DW1000::stopTRX() {
     writeRegister8(DW1000_SYS_CTRL, 0, 0x40);                       // disable tranceiver go back to idle mode
 }
 
+
+/*
+ *      mode: the array and LDE code (OTP/ROM) and LDO tune, and set sleep persist
+ *      DWT_PRESRV_SLEEP 0x0100 - preserve sleep
+ *      DWT_LOADOPSET    0x0080 - load operating parameter set on wakeup
+ *      DWT_CONFIG       0x0040 - download the AON array into the HIF (configuration download)
+ *      DWT_LOADEUI      0x0008
+ *      DWT_GOTORX       0x0002
+ *      DWT_TANDV        0x0001
+ *
+ *      wake: wake up parameters
+ *      DWT_XTAL_EN      0x10 - keep XTAL running during sleep
+ *      DWT_WAKE_SLPCNT  0x8 - wake up after sleep count
+ *      DWT_WAKE_CS      0x4 - wake up on chip select
+ *      DWT_WAKE_WK      0x2 - wake up on WAKEUP PIN
+ *      DWT_SLP_EN       0x1 - enable sleep/deep sleep functionality
+ */
+void DW1000::configure_sleep() {
+
+    writeRegister16(DW1000_AON, 0x00, 0x01B8); //mode
+    writeRegister32(DW1000_AON, 0x06, 0x05);
+    //writeRegister8(DW1000_AON, 0x06 , 0x8); //wake
+}
+
 void DW1000::deepsleep() {
+
+    configure_sleep();
     writeRegister8(DW1000_AON, 0x02, 0x00);                       // disable tranceiver go back to idle mode
-    writeRegister8(DW1000_AON, 0x02, 0x02);  
+    writeRegister8(DW1000_AON, 0x02, 0x02); 
+    ThisThread::sleep_for(1ms);
+}
+
+void DW1000::spi_wakeup()
+{
+    ThisThread::sleep_for(3ms);
+    DigitalOut spicss(p17);
+    uint8_t buffer[22] = {0x00, 0x00, 0x00, 0x00, 0x00};
+    // if (getDeviceID() == 0)
+    // {
+        spicss = 0; 
+        ThisThread::sleep_for(1ms);
+        spicss = 1;
+
+        readRegister(0x0, 0x0, &buffer[20], 10); 
+        ThisThread::sleep_for(1s);
+    // }
+    writeRegister8(DW1000_AON, 0x02, 0x01); 
 }
  
-// PRIVATE Methods ------------------------------------------------------------------------------------
-void DW1000::loadLDE() {                                            // initialise LDE algorithm LDELOAD User Manual p22
-    writeRegister16(DW1000_PMSC, 0, 0x0301);                        // set clock to XTAL so OTP is reliable
+//  PRIVATE Methods ------------------------------------------------------------------------------------
+
+/*  LDELOAD is reset to 0 by default. This needs to be set as part of DW1000 initialisation and before receiver
+    enable, if it is important to get timestamp and diagnostic information from received frames
+ */
+void DW1000::loadLDE() 
+{   
+    //Default values p24 (manual)
+    writeRegister16(DW1000_PMSC, 0x0, 0x0301);                        // set clock to XTAL so OTP is reliable
     writeRegister16(DW1000_OTP_IF, 0x06, 0x8000);                   // set LDELOAD bit in OTP
-    wait_us(150);
+    ThisThread::sleep_for(1ms);
     writeRegister16(DW1000_PMSC, 0, 0x0200);                        // recover to PLL clock
 }
  
