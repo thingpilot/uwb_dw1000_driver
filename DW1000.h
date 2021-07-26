@@ -1,6 +1,6 @@
 /**
 * @file    DW1000.h
-* @version 0.0.1
+* @version 0.0.2
 * @author  Rafaella Neofytou (from Matthias Grob & Manuel Stalder - ETH Zürich - 2015)
 * @brief   H file of the DW1000 driver module. Changed to fit cav project. 
 * 
@@ -56,7 +56,15 @@
 #define DW1000_WRITE_FLAG           0x80 // First Bit of the address has to be 1 to indicate we want to write
 #define DW1000_SUBADDRESS_FLAG      0x40 // if we have a sub address second Bit has to be 1
 #define DW1000_2_SUBADDRESS_FLAG    0x80 // if we have a long sub adress (more than 7 Bit) we set this Bit in the first part
- 
+
+//PMSC States
+#define DW1000_INI                  0x00
+#define DW1000_IDLE                 0x01
+#define DW1000_TX_WAIT              0x02
+#define DW1000_RX_WAIT              0x03
+#define DW1000_TX                   0x04
+#define DW1000_RX                   0x05
+
 class DW1000 {
     public:            
         DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ);              // constructor, uses SPI class
@@ -97,7 +105,9 @@ class DW1000 {
         void setInterrupt(bool RX, bool TX);                                                    // set Interrupt for received a good frame (CRC ok) or transmission done
         void ISR();                                                                             // interrupt handling method (also calls according callback methods)
         uint16_t getFramelength();                                                              // to get the framelength of the received frame from the PHY header
-        
+
+        uint8_t getPMSCState();
+
         // SPI Inteface
         SPI spi;                                                                                // SPI Bus
         DigitalOut cs;                                                                          // Slave selector for SPI-Bus (here explicitly needed to start and end SPI transactions also usable to wake up DW1000)
