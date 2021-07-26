@@ -7,9 +7,12 @@
 */
 
 #include "DW1000.h"
+#include "ThisThread.h"
  
 DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ) :
                 irq(IRQ), spi(MOSI, MISO, SCLK), cs(CS) {
+
+    ThisThread::sleep_for(3s);
    
     deselect();                         // Chip must be deselected first
     spi.format(8,0);                    // Setup the spi for standard 8 bit data and SPI-Mode 0 (GPIO5, GPIO6 open circuit or ground on DW1000)
@@ -138,6 +141,7 @@ void DW1000::sendDelayedFrame(uint8_t* message, uint16_t length, uint64_t TxTime
 }
  
 void DW1000::startRX() {
+   
     writeRegister8(DW1000_SYS_CTRL, 0x01, 0x01);                    // start listening for preamble by setting the RXENAB bit
 }
  
@@ -266,4 +270,14 @@ void DW1000::select() {     // always called to start an SPI transmission
 void DW1000::deselect() {   // always called to end an SPI transmission
     cs = 1;                 // set Cable Select pin high to stop transmission
     irq.enable_irq();       // reenable the interrupt handler
+}
+
+uint8_t DW1000::getPMSCState(){
+    uint8_t sys_state[4];
+    uint8_t pmsc_state;
+
+    readRegister(DW1000_SYS_STATE, 0, sys_state, 32);
+    pmsc_state = sys_state[1];
+
+    return pmsc_state;
 }
