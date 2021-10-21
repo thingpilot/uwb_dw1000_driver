@@ -1,17 +1,18 @@
 /**
 * @file    DW1000.h
-* @version 0.0.1
+* @version 0.0.2
 * @author  Rafaella Neofytou (from Matthias Grob & Manuel Stalder - ETH Zürich - 2015)
 * @brief   H file of the DW1000 driver module. Changed to fit cav project. 
 * 
 */
+ 
 #ifndef DW1000_H
 #define DW1000_H
  
 #include "mbed.h"
  
 // register addresses
-//                                  Address Bytes Description
+//      Mnemonic                    Address Bytes Description
 #define DW1000_DEV_ID               0x00 //     4 Device Identifier – includes device type and revision information
 #define DW1000_EUI                  0x01 //     8 Extended Unique Identifier
 #define DW1000_PANADR               0x03 //     4 PAN Identifier and Short Address
@@ -55,11 +56,21 @@
 #define DW1000_WRITE_FLAG           0x80 // First Bit of the address has to be 1 to indicate we want to write
 #define DW1000_SUBADDRESS_FLAG      0x40 // if we have a sub address second Bit has to be 1
 #define DW1000_2_SUBADDRESS_FLAG    0x80 // if we have a long sub adress (more than 7 Bit) we set this Bit in the first part
- 
+
+//PMSC States
+#define DW1000_INI                  0x00
+#define DW1000_IDLE                 0x01
+#define DW1000_TX_WAIT              0x02
+#define DW1000_RX_WAIT              0x03
+#define DW1000_TX                   0x04
+#define DW1000_RX                   0x05
+
 class DW1000 {
     public:            
-        DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ);              // constructor, uses SPI class
-
+        DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS);              // constructor, uses SPI class
+        
+        void wakeup_init();
+ 
         // Device API
         uint32_t getDeviceID();                                                                 // gets the Device ID which should be 0xDECA0130 (good for testing SPI!)
         uint64_t getEUI();                                                                      // gets 64 bit Extended Unique Identifier according to IEEE standard
@@ -76,7 +87,9 @@ class DW1000 {
         void startRX();                                                                         // start listening for frames
         void stopTRX();   
         void deepsleep();                                                                      // disable tranceiver go back to idle mode
-        
+        void configure_sleep();
+        void spi_wakeup();
+        void dw_on();
         
     //private:
         void loadLDE();                                                                         // load the leading edge detection algorithm to RAM, [IMPORTANT because receiving malfunction may occur] see User Manual LDELOAD on p22 & p158
@@ -84,12 +97,16 @@ class DW1000 {
         void resetAll();                                                                        // soft reset the entire DW1000 (some registers stay as they were see User Manual)
  
         // Interrupt
-        InterruptIn irq; 
-        void receiveFrame();                                                                    // Pin used to handle Events from DW1000 by an Interrupthandler
+        void receiveFrame();                                                                            // Pin used to handle Events from DW1000 by an Interrupthandler
+       
+        // FunctionPointer callbackRX;                                                             // function pointer to callback which is called when successfull RX took place
+        // FunctionPointer callbackTX;                                                             // function pointer to callback which is called when successfull TX took place
         void setInterrupt(bool RX, bool TX);                                                    // set Interrupt for received a good frame (CRC ok) or transmission done
         void ISR();                                                                             // interrupt handling method (also calls according callback methods)
         uint16_t getFramelength();                                                              // to get the framelength of the received frame from the PHY header
-        
+
+        uint8_t getPMSCState();
+
         // SPI Inteface
         SPI spi;                                                                                // SPI Bus
         DigitalOut cs;                                                                          // Slave selector for SPI-Bus (here explicitly needed to start and end SPI transactions also usable to wake up DW1000)
