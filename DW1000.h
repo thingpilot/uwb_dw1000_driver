@@ -67,9 +67,9 @@
 
 class DW1000 {
     public:            
-        DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ);              // constructor, uses SPI class
+        DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS);              // constructor, uses SPI class
         
-        int wakeup_init();
+        void wakeup_init();
  
         // Device API
         uint32_t getDeviceID();                                                                 // gets the Device ID which should be 0xDECA0130 (good for testing SPI!)
@@ -97,7 +97,6 @@ class DW1000 {
         void resetAll();                                                                        // soft reset the entire DW1000 (some registers stay as they were see User Manual)
  
         // Interrupt
-        InterruptIn irq; 
         void receiveFrame();                                                                            // Pin used to handle Events from DW1000 by an Interrupthandler
        
         // FunctionPointer callbackRX;                                                             // function pointer to callback which is called when successfull RX took place

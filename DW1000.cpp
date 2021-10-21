@@ -9,19 +9,20 @@
 #include "DW1000.h"
 #include "ThisThread.h"
 
-DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ) : 
-                irq(IRQ), spi(MOSI, MISO, SCLK), cs(CS)
+DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS) : 
+                spi(MOSI, MISO, SCLK), cs(CS)
 {
-    //dw_on();                          //TODO: Check if wakes up the uwb
-    //ThisThread::sleep_for(3s);        //TODO: Check if needed remove
     deselect();                         // Chip must be deselected first
     spi.format(8,0);                    // Setup the spi for standard 8 bit data and SPI-Mode 0 (GPIO5, GPIO6 open circuit or ground on DW1000)
     spi.frequency(5000000);             // with a 1MHz clock rate (worked up to 49MHz in our Test)
-    //dw_on();
     ThisThread::sleep_for(300ms);       //TODO: Needed?
+    dw_on();
+    
+}
 
+void DW1000::dw_on()
+{
     resetAll();                         // we do a soft reset of the DW1000 everytime the driver starts
-
     //Those values are for the 110kbps mode (5, 16MHz, 1024 Symbols) and are quite complete
     writeRegister16(DW1000_AGC_CTRL, 0x04, 0x8870);             //AGC_TUNE1 for 16MHz PRF, for best performance
     writeRegister32(DW1000_AGC_CTRL, 0x0C, 0x2502A907);         //AGC_TUNE2 (Universal - DO NOT WRITE ANY OTHER VALUE)
@@ -63,39 +64,14 @@ DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS, PinName IRQ
     writeRegister8(DW1000_SYS_CFG, 3, 0x20);                        // enable auto reenabling receiver after error
   
     writeRegister8(DW1000_AON, 0x0A, 0x00);                         //TODO: Check manual for Aon configuration
+
 }
 
-
-int DW1000::wakeup_init()
+void DW1000::wakeup_init()
 {
-
-    //waking up from sleep
-    //check if ldo tune is calibrated from otp(if zero) and write the value to the register
-    uint32_t result;
-
-    readRegister(DW1000_OTP_IF, 0x04, (uint8_t*)&result, 4);
-    if(result != 0)
-    {
-        writeRegister16(DW1000_RF_CONF, 0x30, result);
-    }
-    else 
-    {
-        return -1;
-    }
-
-    return 0;
+    deselect();                         // Chip must be deselected first
+    dw_on();
 }
-
-void DW1000::dw_on()
-{
-    DigitalOut p_spics(p2);
-    p_spics = 0;
-    rtos::ThisThread::sleep_for(1s);
-    p_spics = 1;
-    rtos::ThisThread::sleep_for(1s);
-    p_spics = 0;
-}
-
 
 /* Reads the device id it should be 0xdeca0130
  */
@@ -209,7 +185,6 @@ void DW1000::stopTRX()
     writeRegister8(DW1000_SYS_CTRL, 0, 0x40);                       // disable tranceiver go back to idle mode
 }
 
-
 /*
  *      mode: the array and LDE code (OTP/ROM) and LDO tune, and set sleep persist
  *      DWT_PRESRV_SLEEP 0x0100 - preserve sleep
@@ -228,10 +203,8 @@ void DW1000::stopTRX()
  */
 void DW1000::configure_sleep()
 {
-
     writeRegister16(DW1000_AON, 0x00, 0x01B8); //mode
     writeRegister32(DW1000_AON, 0x06, 0x05);
-    //writeRegister8(DW1000_AON, 0x06 , 0x8); //wake
 }
 
 void DW1000::deepsleep()
@@ -239,23 +212,24 @@ void DW1000::deepsleep()
     configure_sleep();
     writeRegister8(DW1000_AON, 0x02, 0x00);                       // disable tranceiver go back to idle mode
     writeRegister8(DW1000_AON, 0x02, 0x02); 
-    ThisThread::sleep_for(1ms);
+    deselect();
+  
 }
 
 void DW1000::spi_wakeup()
 {
-    ThisThread::sleep_for(3ms);
+  // ThisThread::sleep_for(30ms);
     DigitalOut spicss(p17);
     uint8_t buffer[22] = {0x00, 0x00, 0x00, 0x00, 0x00};
-    // if (getDeviceID() == 0)
-    // {
+    if (getDeviceID() == 0)
+    {
         spicss = 0; 
-        ThisThread::sleep_for(1ms);
+        ThisThread::sleep_for(10ms);
         spicss = 1;
 
         readRegister(0x0, 0x0, &buffer[20], 10); 
-        ThisThread::sleep_for(1s);
-    // }
+       ThisThread::sleep_for(1s);
+    }
     writeRegister8(DW1000_AON, 0x02, 0x01); 
 }
  
@@ -269,7 +243,7 @@ void DW1000::loadLDE()
     //Default values p24 (manual)
     writeRegister16(DW1000_PMSC, 0x0, 0x0301);                        // set clock to XTAL so OTP is reliable
     writeRegister16(DW1000_OTP_IF, 0x06, 0x8000);                   // set LDELOAD bit in OTP
-    ThisThread::sleep_for(1ms);
+    ThisThread::sleep_for(10ms);
     writeRegister16(DW1000_PMSC, 0, 0x0200);                        // recover to PLL clock
 }
 
@@ -283,7 +257,6 @@ void DW1000::resetAll()
 {
     writeRegister8(DW1000_PMSC, 0, 0x01);   // set clock to XTAL
     writeRegister8(DW1000_PMSC, 3, 0x00);   // set All reset
-    wait_us(10);                            // wait for PLL to lock
     writeRegister8(DW1000_PMSC, 3, 0xF0);   // clear All reset
 }
 
@@ -296,12 +269,12 @@ void DW1000::setInterrupt(bool RX, bool TX)
 void DW1000::ISR()
 {
     uint64_t status = getStatus();
-    if (status & 0x4000) {                                          // a frame was received
-        // callbackRX.call();
+    if (status & 0x4000)                                            // a frame was received
+    {                                          
+    
         writeRegister16(DW1000_SYS_STATUS, 0, 0x6F00);              // clearing of receiving status bits
     }
     if (status & 0x80) {                                            // sending complete
-        // callbackTX.call();
         writeRegister8(DW1000_SYS_STATUS, 0, 0xF8);                 // clearing of sending status bits
     }
 }
@@ -391,23 +364,19 @@ void DW1000::setupTransaction(uint8_t reg, uint16_t subaddress, bool write)
  
 void DW1000::select()       // always called to start an SPI transmission
 {
-    irq.disable_irq();      // disable interrupts from DW1000 during SPI becaus this leads to crashes!      TODO: if you have other interrupt handlers attached on the micro controller, they could also interfere.
     cs = 0;                 // set Cable Select pin low to start transmission
 }
 
 void DW1000::deselect()     // always called to end an SPI transmission
 {
     cs = 1;                 // set Cable Select pin high to stop transmission
-    irq.enable_irq();       // reenable the interrupt handler
 }
 
 uint8_t DW1000::getPMSCState()
 {
     uint8_t sys_state[4];
     uint8_t pmsc_state;
-
     readRegister(DW1000_SYS_STATE, 0, sys_state, 32);
     pmsc_state = sys_state[1];
-
     return pmsc_state;
 }
