@@ -17,7 +17,6 @@ DW1000::DW1000(PinName MOSI, PinName MISO, PinName SCLK, PinName CS) :
     spi.frequency(5000000);             // with a 1MHz clock rate (worked up to 49MHz in our Test)
     ThisThread::sleep_for(300ms);       //TODO: Needed?
     dw_on();
-    
 }
 
 void DW1000::dw_on()
@@ -29,10 +28,10 @@ void DW1000::dw_on()
     writeRegister16(DW1000_AGC_CTRL, 0x12, 0x0035);             //AGC_TUNE3 (Universal - DO NOT WRITE ANY OTHER VALUE)
  
     //DRX_TUNE
-    writeRegister16(DW1000_DRX_CONF, 0x02, 0x000A);             //DRX_TUNE0b for 110kbps
+    writeRegister16(DW1000_DRX_CONF, 0x02, 0x0001);             //DRX_TUNE0b for 110kbps
     writeRegister16(DW1000_DRX_CONF, 0x04, 0x0087);             //DRX_TUNE1a for 16MHz PRF
-    writeRegister16(DW1000_DRX_CONF, 0x06, 0x0064);             //DRX_TUNE1b for 110kbps & > 1024 symbols
-    writeRegister32(DW1000_DRX_CONF, 0x08, 0x371A011D);               //PAC size for 2048 symbols preamble
+    writeRegister16(DW1000_DRX_CONF, 0x06, 0x0010);             //DRX_TUNE1b for 110kbps & > 1024 symbols
+    writeRegister32(DW1000_DRX_CONF, 0x08, 0x311A002D);               //PAC size for 2048 symbols preamble
  
     //LDE CONFIGURATION. Default is set to 0x0000
     writeRegister8 (DW1000_LDE_CTRL, 0x0806, 0xD);              //LDE_CFG1 0xD (better performance)
@@ -50,13 +49,13 @@ void DW1000::dw_on()
     
     //FS_PLLTUNE
     writeRegister32 (DW1000_FS_CTRL, 0x07, 0x0800041D);         //FS_PLLCFG for channel 5
-    writeRegister8 (DW1000_FS_CTRL, 0x0B, 0xBE);                //FS_PLLTUNE for channel 5
+    writeRegister8 (DW1000_FS_CTRL, 0x0B, 0xA6);                //FS_PLLTUNE for channel 5
  
     loadLDE();                                                      // important everytime DW1000 initialises/awakes otherwise the LDE algorithm must be turned off or there's receiving malfunction see User Manual LDELOAD on p22 & p158
 
     // 110kbps CAUTION: a lot of other registers have to be set for an optimized operation on 110kbps
     writeRegister16(DW1000_TX_FCTRL, 1, 0x0800 | 0x0100 | 0x0080);  // use 1024 symbols preamble (0x0800) (previously 2048 - 0x2800), 16MHz pulse repetition frequency (0x0100), 110kbps bit rate (0x0080) see p.69 of DW1000 User Manual
-    writeRegister8(DW1000_SYS_CFG, 2, 0x44);                        // enable special receiving option for 110kbps (disable smartTxPower)!! (0x44) see p.64 of DW1000 User Manual [DO NOT enable 1024 byte frames (0x03) becuase it generates disturbance of ranging don't know why...]
+    writeRegister8(DW1000_SYS_CFG, 2, 0x40);                        // enable special receiving option for 110kbps (disable smartTxPower)!! (0x44) see p.64 of DW1000 User Manual [DO NOT enable 1024 byte frames (0x03) becuase it generates disturbance of ranging don't know why...]
  
     writeRegister16(DW1000_TX_ANTD, 0, 16384);                      // set TX and RX Antenna delay to neutral because we calibrate afterwards
     writeRegister16(DW1000_LDE_CTRL, 0x1804, 16384);                // = 2^14 a quarter of the range of the 16-Bit register which corresponds to zero calibration in a round trip (TX1+RX2+TX2+RX1)
